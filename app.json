@@ -1,11 +1,11 @@
 {
   "id": "dbbe7042-978c-461f-abe3-5ce36a97d622",
-  "name": "ShopfloorExecutionBridge Tests",
+  "name": "UNS Bridge Connector Tests",
   "publisher": "alpamayo",
   "version": "1.0.0.0",
 
-  "brief": "Automated tests for ShopfloorExecutionBridge",
-  "description": "Test codeunits validating safety, idempotency, and resilience of the Shopfloor Execution Bridge extension",
+  "brief": "Automated tests for UNS Bridge Connector",
+  "description": "Test codeunits validating safety, idempotency, and resilience of the UNS Bridge Connector extension",
 
   "platform": "26.0.0.0",
   "application": "26.0.0.0",
@@ -22,7 +22,7 @@
   "dependencies": [
     {
       "id": "dbbe7042-978c-461f-abe3-5ce36a97d621",
-      "name": "ShopfloorExecutionBridge",
+      "name": "UNS Bridge Connector",
       "publisher": "alpamayo",
       "version": "1.0.0.0"
     },

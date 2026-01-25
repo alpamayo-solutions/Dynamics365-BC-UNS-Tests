@@ -38,11 +38,25 @@ codeunit 50091 "ALP Permissions Tests"
     end;
 
     [Test]
+    procedure UNSTopicMappingTable_IsAccessible()
+    var
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
+    begin
+        // [SCENARIO] UNS Topic Mapping table exists and is accessible
+        // [GIVEN] The ALP UNS Topic Mapping table
+
+        // [WHEN] Checking table accessibility
+        // [THEN] Table is accessible (not temporary)
+        Assert.IsFalse(ALPUNSTopicMapping.IsTemporary(), 'UNS Topic Mapping table should not be temporary');
+    end;
+
+    [Test]
     [TestPermissions(TestPermissions::Disabled)]
     procedure ShopfloorExecPermissionSet_AllowsTableAccess()
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
         ALPOperationExecution: Record "ALP Operation Execution";
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
         // [SCENARIO] Exec permission set allows access to integration tables
         // [GIVEN] The ALP Shopfloor Exec permission set (ID 50041)
@@ -51,6 +65,7 @@ codeunit 50091 "ALP Permissions Tests"
         // [THEN] Read permission is available
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should have read permission on Inbox');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should have read permission on Execution');
+        Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should have read permission on UNS Topic Mapping');
     end;
 
     [Test]
@@ -59,6 +74,7 @@ codeunit 50091 "ALP Permissions Tests"
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
         ALPOperationExecution: Record "ALP Operation Execution";
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
         // [SCENARIO] View permission set allows read access
         // [GIVEN] The ALP Shopfloor View permission set (ID 50040)
@@ -67,6 +83,7 @@ codeunit 50091 "ALP Permissions Tests"
         // [THEN] Read permission is granted
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should have read permission on Inbox');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should have read permission on Execution');
+        Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should have read permission on UNS Topic Mapping');
     end;
 
     [Test]

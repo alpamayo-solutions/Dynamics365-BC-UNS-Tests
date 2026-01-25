@@ -11,6 +11,8 @@ codeunit 50092 "ALP Install Tests"
     var
         Assert: Codeunit Assert;
 
+    // ==================== TABLE EXISTENCE TESTS ====================
+
     [Test]
     procedure Install_IntegrationInboxTableExists()
     var
@@ -44,6 +46,24 @@ codeunit 50092 "ALP Install Tests"
     end;
 
     [Test]
+    procedure Install_UNSTopicMappingTableExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, ALP UNS Topic Mapping table exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for table existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Table);
+        AllObjWithCaption.SetRange("Object ID", 50005);
+
+        // [THEN] Table exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Topic Mapping table (50005) should exist');
+    end;
+
+    // ==================== ENUM EXISTENCE TESTS ====================
+
+    [Test]
     procedure Install_IntegrationStatusEnumExists()
     var
         AllObjWithCaption: Record AllObjWithCaption;
@@ -57,6 +77,22 @@ codeunit 50092 "ALP Install Tests"
 
         // [THEN] Enum exists
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Integration Status enum (50000) should exist');
+    end;
+
+    [Test]
+    procedure Install_UNSMappingStatusEnumExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, ALP UNS Mapping Status enum exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for enum existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Enum);
+        AllObjWithCaption.SetRange("Object ID", 50001);
+
+        // [THEN] Enum exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Mapping Status enum (50001) should exist');
     end;
 
     [Test]
@@ -91,6 +127,8 @@ codeunit 50092 "ALP Install Tests"
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Calc Svc codeunit (50012) should exist');
     end;
 
+    // ==================== PAGE EXISTENCE TESTS ====================
+
     [Test]
     procedure Install_InboxListPageExists()
     var
@@ -108,11 +146,29 @@ codeunit 50092 "ALP Install Tests"
     end;
 
     [Test]
+    procedure Install_UNSTopicMappingListPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, UNS Topic Mapping list page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50023);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Topic Mapping List page (50023) should exist');
+    end;
+
+    // ==================== API PAGE EXISTENCE TESTS ====================
+
+    [Test]
     procedure Install_ExecutionEventsAPIPageExists()
     var
         AllObjWithCaption: Record AllObjWithCaption;
     begin
-        // [SCENARIO] After installation, API page exists
+        // [SCENARIO] After installation, Execution Events API page exists
         // [GIVEN] The app is installed
 
         // [WHEN] Checking for page existence
@@ -121,6 +177,152 @@ codeunit 50092 "ALP Install Tests"
 
         // [THEN] Page exists
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Events API page (50030) should exist');
+    end;
+
+    [Test]
+    procedure Install_WorkCentersAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Work Centers API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50031);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Work Centers API page (50031) should exist');
+    end;
+
+    [Test]
+    procedure Install_ProductionOrdersAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Production Orders API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50032);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Production Orders API page (50032) should exist');
+    end;
+
+    [Test]
+    procedure Install_ProdOrderRoutingAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Prod Order Routing API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50033);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Prod Order Routing API page (50033) should exist');
+    end;
+
+    [Test]
+    procedure Install_ProdOrderComponentsAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Prod Order Components API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50034);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Prod Order Components API page (50034) should exist');
+    end;
+
+    [Test]
+    procedure Install_IntegrationInboxAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Integration Inbox API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50036);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Integration Inbox API page (50036) should exist');
+    end;
+
+    [Test]
+    procedure Install_RoutingsAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Routings API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50037);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Routings API page (50037) should exist');
+    end;
+
+    [Test]
+    procedure Install_ItemsAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Items API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50038);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Items API page (50038) should exist');
+    end;
+
+    [Test]
+    procedure Install_UNSTopicMappingAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, UNS Topic Mapping API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50039);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Topic Mapping API page (50039) should exist');
+    end;
+
+    // ==================== REPORT EXISTENCE TESTS ====================
+
+    [Test]
+    procedure Install_DailyExecPerformanceReportExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Daily Exec Performance report exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for report existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Report);
+        AllObjWithCaption.SetRange("Object ID", 50051);
+
+        // [THEN] Report exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Daily Exec Performance report (50051) should exist');
     end;
 
     [Test]
@@ -203,6 +405,7 @@ codeunit 50092 "ALP Install Tests"
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
         ALPOperationExecution: Record "ALP Operation Execution";
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
         // [SCENARIO] Fresh installation has accessible tables
         // [GIVEN] The app is freshly installed
@@ -211,9 +414,11 @@ codeunit 50092 "ALP Install Tests"
         // [THEN] Tables can be queried without error
         ALPIntegrationInbox.Reset();
         ALPOperationExecution.Reset();
+        ALPUNSTopicMapping.Reset();
 
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should be able to read Inbox table');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should be able to read Execution table');
+        Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should be able to read UNS Topic Mapping table');
     end;
 
     [Test]
@@ -221,6 +426,7 @@ codeunit 50092 "ALP Install Tests"
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
         ALPOperationExecution: Record "ALP Operation Execution";
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
         // [SCENARIO] App follows clean uninstall patterns
         // [GIVEN] The app is installed
@@ -231,6 +437,7 @@ codeunit 50092 "ALP Install Tests"
         // Verify tables don't have OnDelete triggers that create orphan data
         ALPIntegrationInbox.Reset();
         ALPOperationExecution.Reset();
+        ALPUNSTopicMapping.Reset();
 
         // App follows proper uninstall patterns:
         // - No custom uninstall codeunit that might leave data
@@ -244,6 +451,7 @@ codeunit 50092 "ALP Install Tests"
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
         ALPOperationExecution: Record "ALP Operation Execution";
+        ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
         // [SCENARIO] App upgrade maintains data integrity
         // [GIVEN] The app is installed
@@ -253,6 +461,7 @@ codeunit 50092 "ALP Install Tests"
         Assert.IsTrue(ALPIntegrationInbox.FieldNo("Message Id") > 0, 'Message Id field should exist');
         Assert.IsTrue(ALPOperationExecution.FieldNo("Order No.") > 0, 'Order No. field should exist');
         Assert.IsTrue(ALPOperationExecution.FieldNo("Operation No.") > 0, 'Operation No. field should exist');
+        Assert.IsTrue(ALPUNSTopicMapping.FieldNo("UNS Topic") > 0, 'UNS Topic field should exist');
     end;
 
     [Test]
