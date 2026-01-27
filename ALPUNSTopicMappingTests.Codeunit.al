@@ -209,9 +209,8 @@ codeunit 50093 "ALP UNS Topic Mapping Tests"
     procedure Validation_EmptyTopic_CannotInsert()
     var
         ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
-        InsertSucceeded: Boolean;
     begin
-        // [SCENARIO] Empty UNS Topic cannot be inserted (primary key)
+        // [SCENARIO] Empty UNS Topic cannot be inserted due to NotBlank validation
         Initialize();
 
         // [GIVEN] A mapping with empty topic
@@ -220,11 +219,10 @@ codeunit 50093 "ALP UNS Topic Mapping Tests"
         ALPUNSTopicMapping."Work Center No." := 'WC001';
         ALPUNSTopicMapping.Status := "ALP UNS Mapping Status"::Active;
 
-        // [WHEN] Attempting to insert
-        InsertSucceeded := ALPUNSTopicMapping.Insert(false);
-
-        // [THEN] Insert fails (empty primary key)
-        Assert.IsFalse(InsertSucceeded, 'Empty topic insert should fail');
+        // [WHEN] Attempting to insert with validation
+        // [THEN] Insert fails with NotBlank error
+        asserterror ALPUNSTopicMapping.Insert(true);
+        Assert.ExpectedError('UNS Topic');
     end;
 
     [Test]
