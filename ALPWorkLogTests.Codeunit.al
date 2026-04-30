@@ -218,6 +218,7 @@ codeunit 50094 "ALP Work Log Tests"
 
         ALPWorkLogEntry.FindFirst();
         Assert.AreEqual(EndTime, ALPWorkLogEntry."End Time", 'End Time should match');
+        Assert.AreEqual(Format(EndMessageId), ALPWorkLogEntry."End Message Id", 'End Message Id should match end event');
         Assert.IsTrue(ALPWorkLogEntry."Duration Sec" > 0, 'Duration should be positive');
 
         // Cleanup
@@ -350,7 +351,7 @@ codeunit 50094 "ALP Work Log Tests"
 
         // [WHEN] The disruption work log entry is closed
         EndTime := CurrentDateTime;
-        WorkLogSvc.CloseWorkLogEntry(ProductionOrder."No.", OperationNo, WorkLogEventType::Disruption, EndTime);
+        WorkLogSvc.CloseWorkLogEntryWithEndMessageId(ProductionOrder."No.", OperationNo, WorkLogEventType::Disruption, EndTime, 'disruption-end-msg');
 
         // [THEN] Work log entry is closed with computed duration
         ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
@@ -359,6 +360,7 @@ codeunit 50094 "ALP Work Log Tests"
 
         Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Status should be Closed');
         Assert.AreEqual(EndTime, ALPWorkLogEntry."End Time", 'End Time should match');
+        Assert.AreEqual('disruption-end-msg', ALPWorkLogEntry."End Message Id", 'End Message Id should match');
         Assert.IsTrue(ALPWorkLogEntry."Duration Sec" > 0, 'Duration should be positive');
 
         // Cleanup
@@ -407,6 +409,7 @@ codeunit 50094 "ALP Work Log Tests"
         ALPWorkLogEntry.FindFirst();
         Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Status should be Closed');
         Assert.AreEqual(EndTime, ALPWorkLogEntry."End Time", 'End Time should match');
+        Assert.AreEqual(Format(EndMessageId), ALPWorkLogEntry."End Message Id", 'End Message Id should match');
         Assert.IsTrue(ALPWorkLogEntry."Duration Sec" > 0, 'Duration should be positive');
 
         // Cleanup
@@ -414,7 +417,7 @@ codeunit 50094 "ALP Work Log Tests"
     end;
 
     [Test]
-    procedure CorrectionService_ReplaceInterval_UpdatesDisruptionWorkLog()
+    procedure CorrectionService_ReplaceInterval_SupersedesOriginalAndCreatesReplacement()
     var
         ProductionOrder: Record "Production Order";
         ALPWorkLogEntry: Record "ALP Work Log Entry";
@@ -428,6 +431,142 @@ codeunit 50094 "ALP Work Log Tests"
         NewStartTime: DateTime;
         NewEndTime: DateTime;
         MessageId: Text[50];
+        EndMessageId: Text[50];
+        OriginalEntryNo: Integer;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        StartTime := CurrentDateTime - 3600000;
+        EndTime := CurrentDateTime - 1800000;
+        MessageId := Format(CreateGuid());
+        EndMessageId := Format(CreateGuid());
+        WorkLogSvc.CreateWorkLogEntry(
+            MessageId,
+            ProductionOrder."No.",
+            OperationNo,
+            '',
+            'OP-001',
+            '',
+            'F',
+            WorkLogEventType::Disruption,
+            'MECH-FAIL',
+            StartTime,
+            'TEST');
+        WorkLogSvc.CloseWorkLogEntryWithEndMessageId(ProductionOrder."No.", OperationNo, WorkLogEventType::Disruption, EndTime, EndMessageId);
+
+        ALPWorkLogEntry.SetRange("Message Id", MessageId);
+        ALPWorkLogEntry.FindFirst();
+        OriginalEntryNo := ALPWorkLogEntry."Entry No.";
+
+        NewStartTime := CurrentDateTime - 3000000;
+        NewEndTime := CurrentDateTime - 1200000;
+
+        Correction.Init();
+        Correction."Correction Id" := Format(CreateGuid());
+        Correction.Action := 'replace_interval';
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Event Type" := 'Disruption';
+        Correction."Target Event Ids" := MessageId;
+        Correction."Replacement Start Time" := NewStartTime;
+        Correction."Replacement End Time" := NewEndTime;
+        Correction."Operator Id" := 'OP-999';
+        Correction."Shift Code" := 'S';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should succeed');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.Get(OriginalEntryNo);
+        Assert.AreEqual(ALPWorkLogEntry.Status::Superseded, ALPWorkLogEntry.Status, 'Original should be superseded');
+        Assert.AreEqual(Correction."Correction Id", ALPWorkLogEntry."Invalidated By Correction Id", 'Original should link to correction');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.SetRange("Event Type", ALPWorkLogEntry."Event Type"::Disruption);
+        ALPWorkLogEntry.SetRange("Correction Id", Correction."Correction Id");
+        ALPWorkLogEntry.FindLast();
+
+        Assert.AreEqual(NewStartTime, ALPWorkLogEntry."Start Time", 'Start Time should be replaced');
+        Assert.AreEqual(NewEndTime, ALPWorkLogEntry."End Time", 'End Time should be replaced');
+        Assert.AreEqual('OP-999', ALPWorkLogEntry."Operator Id", 'Operator Id should be replaced');
+        Assert.AreEqual('S', ALPWorkLogEntry."Shift Code", 'Shift Code should be replaced');
+        Assert.AreEqual(OriginalEntryNo, ALPWorkLogEntry."Replaces Entry No.", 'Replacement should link to original');
+        Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Replacement should be closed');
+    end;
+
+    [Test]
+    procedure CorrectionService_CancelEvent_MarksTargetCancelled()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Correction: Record "ALP Execution Correction";
+        WorkLogSvc: Codeunit "ALP Work Log Svc";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        WorkLogEventType: Enum "ALP Work Log Event Type";
+        OperationNo: Code[10];
+        MessageId: Text[50];
+        EndMessageId: Text[50];
+        OriginalEntryNo: Integer;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        MessageId := Format(CreateGuid());
+        EndMessageId := Format(CreateGuid());
+        WorkLogSvc.CreateWorkLogEntry(
+            MessageId,
+            ProductionOrder."No.",
+            OperationNo,
+            '',
+            'OP-001',
+            '',
+            'F',
+            WorkLogEventType::Execution,
+            '',
+            CurrentDateTime - 3600000,
+            'TEST');
+        WorkLogSvc.CloseWorkLogEntryWithEndMessageId(ProductionOrder."No.", OperationNo, WorkLogEventType::Execution, CurrentDateTime - 1800000, EndMessageId);
+
+        ALPWorkLogEntry.SetRange("Message Id", MessageId);
+        ALPWorkLogEntry.FindFirst();
+        OriginalEntryNo := ALPWorkLogEntry."Entry No.";
+
+        Correction.Init();
+        Correction."Correction Id" := Format(CreateGuid());
+        Correction.Action := 'cancel_event';
+        Correction."Target Event Ids" := EndMessageId;
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Event Type" := 'Execution';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should succeed');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.Get(OriginalEntryNo);
+        Assert.AreEqual(ALPWorkLogEntry.Status::Cancelled, ALPWorkLogEntry.Status, 'Original should be cancelled');
+        Assert.AreEqual(Correction."Correction Id", ALPWorkLogEntry."Invalidated By Correction Id", 'Original should link to correction');
+    end;
+
+    [Test]
+    procedure CorrectionService_ChangeMetadata_PreservesOriginalInterval()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Correction: Record "ALP Execution Correction";
+        WorkLogSvc: Codeunit "ALP Work Log Svc";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        WorkLogEventType: Enum "ALP Work Log Event Type";
+        OperationNo: Code[10];
+        StartTime: DateTime;
+        EndTime: DateTime;
+        MessageId: Text[50];
+        OriginalEntryNo: Integer;
     begin
         Initialize();
         CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
@@ -443,23 +582,70 @@ codeunit 50094 "ALP Work Log Tests"
             'OP-001',
             '',
             'F',
-            WorkLogEventType::Disruption,
-            'MECH-FAIL',
+            WorkLogEventType::Execution,
+            '',
             StartTime,
             'TEST');
-        WorkLogSvc.CloseWorkLogEntry(ProductionOrder."No.", OperationNo, WorkLogEventType::Disruption, EndTime);
+        WorkLogSvc.CloseWorkLogEntryWithEndMessageId(ProductionOrder."No.", OperationNo, WorkLogEventType::Execution, EndTime, Format(CreateGuid()));
 
-        NewStartTime := CurrentDateTime - 3000000;
-        NewEndTime := CurrentDateTime - 1200000;
+        ALPWorkLogEntry.SetRange("Message Id", MessageId);
+        ALPWorkLogEntry.FindFirst();
+        OriginalEntryNo := ALPWorkLogEntry."Entry No.";
 
         Correction.Init();
         Correction."Correction Id" := Format(CreateGuid());
-        Correction.Action := 'replace_interval';
+        Correction.Action := 'change_metadata';
+        Correction."Target Event Ids" := MessageId;
         Correction."Requested By" := 'alice.admin';
         Correction."Requested At" := CurrentDateTime;
         Correction."Order No." := ProductionOrder."No.";
         Correction."Operation No." := OperationNo;
-        Correction."Event Type" := 'Disruption';
+        Correction."Event Type" := 'Execution';
+        Correction."Replacement Start Time" := CurrentDateTime - 7200000;
+        Correction."Replacement End Time" := CurrentDateTime - 5400000;
+        Correction."Operator Id" := 'OP-222';
+        Correction."Shift Code" := 'N';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should succeed');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.Get(OriginalEntryNo);
+        Assert.AreEqual(ALPWorkLogEntry.Status::Superseded, ALPWorkLogEntry.Status, 'Original should be superseded');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.SetRange("Correction Id", Correction."Correction Id");
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(StartTime, ALPWorkLogEntry."Start Time", 'Start Time should be preserved');
+        Assert.AreEqual(EndTime, ALPWorkLogEntry."End Time", 'End Time should be preserved');
+        Assert.AreEqual('OP-222', ALPWorkLogEntry."Operator Id", 'Operator should be corrected');
+        Assert.AreEqual('N', ALPWorkLogEntry."Shift Code", 'Shift should be corrected');
+    end;
+
+    [Test]
+    procedure CorrectionService_InsertMissingEvent_CreatesCorrectionBackedWorkLog()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Correction: Record "ALP Execution Correction";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        OperationNo: Code[10];
+        NewStartTime: DateTime;
+        NewEndTime: DateTime;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        NewStartTime := CurrentDateTime - 3600000;
+        NewEndTime := CurrentDateTime - 1800000;
+
+        Correction.Init();
+        Correction."Correction Id" := Format(CreateGuid());
+        Correction.Action := 'insert_missing_event';
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Event Type" := 'Execution';
         Correction."Replacement Start Time" := NewStartTime;
         Correction."Replacement End Time" := NewEndTime;
         Correction."Operator Id" := 'OP-999';
@@ -467,15 +653,14 @@ codeunit 50094 "ALP Work Log Tests"
 
         Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should succeed');
 
-        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
-        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
-        ALPWorkLogEntry.SetRange("Event Type", ALPWorkLogEntry."Event Type"::Disruption);
-        ALPWorkLogEntry.FindLast();
-
-        Assert.AreEqual(NewStartTime, ALPWorkLogEntry."Start Time", 'Start Time should be replaced');
-        Assert.AreEqual(NewEndTime, ALPWorkLogEntry."End Time", 'End Time should be replaced');
-        Assert.AreEqual('OP-999', ALPWorkLogEntry."Operator Id", 'Operator Id should be replaced');
-        Assert.AreEqual('S', ALPWorkLogEntry."Shift Code", 'Shift Code should be replaced');
+        ALPWorkLogEntry.SetRange("Correction Id", Correction."Correction Id");
+        Assert.RecordCount(ALPWorkLogEntry, 1);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(Correction."Correction Id", ALPWorkLogEntry."Message Id", 'Correction id should act as synthetic message id');
+        Assert.AreEqual(0, ALPWorkLogEntry."Replaces Entry No.", 'Inserted event should not replace an original');
+        Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Inserted event should be closed');
+        Assert.AreEqual('OP-999', ALPWorkLogEntry."Operator Id", 'Operator should match');
+        Assert.IsTrue(ALPWorkLogEntry."Item No." <> '', 'Item No. should be derived from the production order');
     end;
 
     // ==================== OPERATOR AND SHIFT PERSISTENCE TESTS ====================
