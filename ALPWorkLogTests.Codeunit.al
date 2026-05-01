@@ -226,6 +226,49 @@ codeunit 50094 "ALP Work Log Tests"
         CleanupTestData(EndMessageId, ProductionOrder."No.", OperationNo);
     end;
 
+    [Test]
+    procedure ExecutionEvents_UseSourceEventIdsForWorkLogStartAndEnd()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        ExecStart: Record "ALP Operation Execution";
+        ExecEnd: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        StartMessageId: Guid;
+        EndMessageId: Guid;
+        OperationNo: Code[10];
+        StartTime: DateTime;
+        EndTime: DateTime;
+        SourceStartEventId: Text[50];
+        SourceEndEventId: Text[50];
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        StartMessageId := CreateGuid();
+        EndMessageId := CreateGuid();
+        SourceStartEventId := CopyStr('start-' + Format(StartMessageId), 1, MaxStrLen(SourceStartEventId));
+        SourceEndEventId := CopyStr('end-' + Format(EndMessageId), 1, MaxStrLen(SourceEndEventId));
+        StartTime := CurrentDateTime - 3600000;
+        EndTime := CurrentDateTime - 1800000;
+
+        ExecStart := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, StartTime);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(ExecStart, StartMessageId, 'Start', 'OP-001', 'F', SourceStartEventId);
+
+        ExecEnd := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 10, 0, 0.9, 0.8, EndTime);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(ExecEnd, EndMessageId, 'End', 'OP-001', 'F', SourceEndEventId);
+
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        Assert.RecordCount(ALPWorkLogEntry, 1);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(SourceStartEventId, ALPWorkLogEntry."Message Id", 'Start source event id should be stored as work-log Message Id');
+        Assert.AreEqual(SourceEndEventId, ALPWorkLogEntry."End Message Id", 'End source event id should be stored as work-log End Message Id');
+
+        CleanupTestData(StartMessageId, ProductionOrder."No.", OperationNo);
+        CleanupTestData(EndMessageId, ProductionOrder."No.", OperationNo);
+    end;
+
     // ==================== IDEMPOTENCY TESTS ====================
 
     [Test]
@@ -264,6 +307,93 @@ codeunit 50094 "ALP Work Log Tests"
 
         // Cleanup
         CleanupTestData(MessageId, ProductionOrder."No.", OperationNo);
+    end;
+
+    [Test]
+    procedure Idempotency_DuplicateSourceStartEvent_CreatesOneInboxAndOneWorkLog()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        ALPIntegrationInbox: Record "ALP Integration Inbox";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        MessageId1: Guid;
+        MessageId2: Guid;
+        OperationNo: Code[10];
+        SourceEventId: Text[50];
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        MessageId1 := CreateGuid();
+        MessageId2 := CreateGuid();
+        SourceEventId := CopyStr('start-' + Format(MessageId1), 1, MaxStrLen(SourceEventId));
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, CurrentDateTime);
+
+        Assert.IsTrue(ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, MessageId1, 'Start', 'OP-001', 'F', SourceEventId), 'First source event should process');
+        Assert.IsTrue(ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, MessageId2, 'Start', 'OP-001', 'F', SourceEventId), 'Duplicate source event should be idempotent');
+
+        ALPWorkLogEntry.SetRange("Message Id", SourceEventId);
+        Assert.RecordCount(ALPWorkLogEntry, 1);
+
+        ALPIntegrationInbox.SetRange("Source Event Id", SourceEventId);
+        Assert.RecordCount(ALPIntegrationInbox, 1);
+
+        CleanupTestData(MessageId1, ProductionOrder."No.", OperationNo);
+    end;
+
+    [Test]
+    procedure PostHocEnd_ClosesHistoricalWorkLogWhenCurrentStateIsNewer()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        ALPOperationExecution: Record "ALP Operation Execution";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        OperationNo: Code[10];
+        CurrentStart: DateTime;
+        CurrentEnd: DateTime;
+        HistoricalStart: DateTime;
+        HistoricalEnd: DateTime;
+        CurrentStartId: Text[50];
+        CurrentEndId: Text[50];
+        HistoricalStartId: Text[50];
+        HistoricalEndId: Text[50];
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        CurrentStart := CurrentDateTime - 3600000;
+        CurrentEnd := CurrentDateTime - 1800000;
+        HistoricalStart := CurrentDateTime - 7200000;
+        HistoricalEnd := CurrentDateTime - 5400000;
+        CurrentStartId := CopyStr('current-start-' + Format(CreateGuid()), 1, MaxStrLen(CurrentStartId));
+        CurrentEndId := CopyStr('current-end-' + Format(CreateGuid()), 1, MaxStrLen(CurrentEndId));
+        HistoricalStartId := CopyStr('history-start-' + Format(CreateGuid()), 1, MaxStrLen(HistoricalStartId));
+        HistoricalEndId := CopyStr('history-end-' + Format(CreateGuid()), 1, MaxStrLen(HistoricalEndId));
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, CurrentStart);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-001', 'F', CurrentStartId);
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 10, 0, 0.9, 0.8, CurrentEnd);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'End', 'OP-001', 'F', CurrentEndId);
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, HistoricalStart);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-001', 'F', HistoricalStartId);
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 5, 0, 0.9, 0.8, HistoricalEnd);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'End', 'OP-001', 'F', HistoricalEndId);
+
+        ALPWorkLogEntry.SetRange("Message Id", HistoricalStartId);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Historical interval should close even when current-state timestamp is newer');
+        Assert.AreEqual(HistoricalEndId, ALPWorkLogEntry."End Message Id", 'Historical end source event id should be stored');
+
+        ALPOperationExecution.Get(ProductionOrder."No.", OperationNo);
+        Assert.AreEqual(CurrentEnd, ALPOperationExecution."Source Timestamp", 'Current-state execution timestamp must not regress');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.DeleteAll(true);
     end;
 
     // ==================== DISRUPTION TESTS ====================
@@ -661,6 +791,109 @@ codeunit 50094 "ALP Work Log Tests"
         Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Inserted event should be closed');
         Assert.AreEqual('OP-999', ALPWorkLogEntry."Operator Id", 'Operator should match');
         Assert.IsTrue(ALPWorkLogEntry."Item No." <> '', 'Item No. should be derived from the production order');
+    end;
+
+    [Test]
+    procedure CorrectionService_TargetsExecutionEventSourceIds()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Correction: Record "ALP Execution Correction";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        OperationNo: Code[10];
+        OriginalEntryNo: Integer;
+        SourceStartEventId: Text[50];
+        SourceEndEventId: Text[50];
+        CorrectionId: Text[50];
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        SourceStartEventId := CopyStr('start-' + Format(CreateGuid()), 1, MaxStrLen(SourceStartEventId));
+        SourceEndEventId := CopyStr('end-' + Format(CreateGuid()), 1, MaxStrLen(SourceEndEventId));
+        CorrectionId := CopyStr('corr-' + Format(CreateGuid()), 1, MaxStrLen(CorrectionId));
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, CurrentDateTime - 3600000);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-001', 'F', SourceStartEventId);
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 10, 0, 0.9, 0.8, CurrentDateTime - 1800000);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'End', 'OP-001', 'F', SourceEndEventId);
+
+        ALPWorkLogEntry.SetRange("Message Id", SourceStartEventId);
+        ALPWorkLogEntry.FindFirst();
+        OriginalEntryNo := ALPWorkLogEntry."Entry No.";
+
+        Correction.Init();
+        Correction."Correction Id" := CorrectionId;
+        Correction.Action := 'cancel_event';
+        Correction."Target Event Ids" := SourceEndEventId;
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Event Type" := 'Execution';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should resolve executionEvents-created source IDs');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.Get(OriginalEntryNo);
+        Assert.AreEqual(ALPWorkLogEntry.Status::Cancelled, ALPWorkLogEntry.Status, 'Original should be cancelled');
+        Assert.AreEqual(CorrectionId, ALPWorkLogEntry."Invalidated By Correction Id", 'Correction id should be linked');
+    end;
+
+    [Test]
+    procedure CorrectionService_DuplicateCorrectionId_IsIdempotent()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        ALPExecutionCorrection: Record "ALP Execution Correction";
+        Correction: Record "ALP Execution Correction";
+        WorkLogSvc: Codeunit "ALP Work Log Svc";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        WorkLogEventType: Enum "ALP Work Log Event Type";
+        OperationNo: Code[10];
+        MessageId: Text[50];
+        CorrectionId: Text[50];
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        MessageId := CopyStr('start-' + Format(CreateGuid()), 1, MaxStrLen(MessageId));
+        CorrectionId := CopyStr('corr-' + Format(CreateGuid()), 1, MaxStrLen(CorrectionId));
+        WorkLogSvc.CreateWorkLogEntry(
+            MessageId,
+            ProductionOrder."No.",
+            OperationNo,
+            '',
+            'OP-001',
+            '',
+            'F',
+            WorkLogEventType::Execution,
+            '',
+            CurrentDateTime - 3600000,
+            'TEST');
+
+        Correction.Init();
+        Correction."Correction Id" := CorrectionId;
+        Correction.Action := 'cancel_event';
+        Correction."Target Event Ids" := MessageId;
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Event Type" := 'Execution';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'First correction should succeed');
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Duplicate correction should be idempotent');
+
+        ALPExecutionCorrection.SetRange("Correction Id", CorrectionId);
+        Assert.RecordCount(ALPExecutionCorrection, 1);
+
+        ALPWorkLogEntry.SetRange("Message Id", MessageId);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(ALPWorkLogEntry.Status::Cancelled, ALPWorkLogEntry.Status, 'Target should remain cancelled');
+        Assert.AreEqual(CorrectionId, ALPWorkLogEntry."Invalidated By Correction Id", 'Target should link to the correction once');
     end;
 
     // ==================== OPERATOR AND SHIFT PERSISTENCE TESTS ====================
