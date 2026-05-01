@@ -227,6 +227,56 @@ codeunit 50094 "ALP Work Log Tests"
     end;
 
     [Test]
+    procedure EndEvent_PreservesStartMetadataAndClosesSingleInterval()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPOperationExecution: Record "ALP Operation Execution";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        ExecStart: Record "ALP Operation Execution";
+        ExecEnd: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        StartMessageId: Guid;
+        EndMessageId: Guid;
+        OperationNo: Code[10];
+        StartTime: DateTime;
+        EndTime: DateTime;
+    begin
+        // [SCENARIO] End updates runtime/current state without wiping Start metadata.
+        Initialize();
+
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+
+        StartMessageId := CreateGuid();
+        StartTime := CurrentDateTime - 8000;
+        ExecStart := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, StartTime);
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(ExecStart, StartMessageId, 'Start', 'OP-123', 'F');
+
+        EndMessageId := CreateGuid();
+        EndTime := CurrentDateTime;
+        ExecEnd := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 1, 1, EndTime);
+        ExecEnd."Runtime Sec" := 8;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(ExecEnd, EndMessageId, 'End', '', 'F');
+
+        ALPOperationExecution.Get(ProductionOrder."No.", OperationNo);
+        Assert.AreEqual(StartTime, ALPOperationExecution."Started At", 'Started At should be preserved from Start');
+        Assert.AreEqual('OP-123', ALPOperationExecution."Operator Id", 'Blank End operator should not clear Start operator');
+        Assert.AreEqual(8, ALPOperationExecution."Runtime Sec", 'Runtime should be applied from End');
+
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        Assert.RecordCount(ALPWorkLogEntry, 1);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Work log interval should be closed');
+        Assert.AreEqual(StartTime, ALPWorkLogEntry."Start Time", 'Work log Start Time should come from Start');
+        Assert.AreEqual(EndTime, ALPWorkLogEntry."End Time", 'Work log End Time should come from End');
+        Assert.AreEqual('OP-123', ALPWorkLogEntry."Operator Id", 'Work log operator should come from Start');
+        Assert.IsTrue(ALPWorkLogEntry."Duration Sec" > 0, 'Work log duration should be positive');
+
+        CleanupTestData(StartMessageId, ProductionOrder."No.", OperationNo);
+        CleanupTestData(EndMessageId, ProductionOrder."No.", OperationNo);
+    end;
+
+    [Test]
     procedure ExecutionEvents_UseSourceEventIdsForWorkLogStartAndEnd()
     var
         ProductionOrder: Record "Production Order";
