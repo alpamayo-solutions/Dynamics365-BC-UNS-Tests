@@ -77,6 +77,17 @@ codeunit 50094 "ALP Work Log Tests"
         exit(Exec);
     end;
 
+    local procedure GetWorkCenterNo(OrderNo: Code[20]; OperationNo: Code[10]): Code[20]
+    var
+        ProdOrderRoutingLine: Record "Prod. Order Routing Line";
+    begin
+        ProdOrderRoutingLine.SetRange(Status, ProdOrderRoutingLine.Status::Released);
+        ProdOrderRoutingLine.SetRange("Prod. Order No.", OrderNo);
+        ProdOrderRoutingLine.SetRange("Operation No.", OperationNo);
+        ProdOrderRoutingLine.FindFirst();
+        exit(ProdOrderRoutingLine."No.");
+    end;
+
     local procedure CleanupTestData(MessageId: Guid; OrderNo: Code[20]; OperationNo: Code[10])
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
@@ -92,6 +103,14 @@ codeunit 50094 "ALP Work Log Tests"
         ALPWorkLogEntry.SetRange("Order No.", OrderNo);
         ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
         ALPWorkLogEntry.DeleteAll(true);
+    end;
+
+    local procedure CleanupInboxBySourceEventId(SourceEventId: Text[50])
+    var
+        ALPIntegrationInbox: Record "ALP Integration Inbox";
+    begin
+        ALPIntegrationInbox.SetRange("Source Event Id", SourceEventId);
+        ALPIntegrationInbox.DeleteAll(true);
     end;
 
     // ==================== START EVENT TESTS ====================
@@ -274,6 +293,108 @@ codeunit 50094 "ALP Work Log Tests"
 
         CleanupTestData(StartMessageId, ProductionOrder."No.", OperationNo);
         CleanupTestData(EndMessageId, ProductionOrder."No.", OperationNo);
+    end;
+
+    [Test]
+    procedure OperatorSignoff_ClosesOnlyMatchingParticipant()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        OperationNo: Code[10];
+        WorkCenterNo: Code[20];
+        StartA: Text[50];
+        StartB: Text[50];
+        SignoffB: Text[50];
+        BaseTime: DateTime;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+        WorkCenterNo := GetWorkCenterNo(ProductionOrder."No.", OperationNo);
+        BaseTime := CurrentDateTime - 600000;
+        StartA := CopyStr('start-a-' + Format(CreateGuid()), 1, MaxStrLen(StartA));
+        StartB := CopyStr('start-b-' + Format(CreateGuid()), 1, MaxStrLen(StartB));
+        SignoffB := CopyStr('signoff-b-' + Format(CreateGuid()), 1, MaxStrLen(SignoffB));
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-A', 'F', StartA);
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime + 120000);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-B', 'F', StartB);
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime + 300000);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'OperatorSignoff', 'OP-B', 'F', SignoffB, 0DT, StartB);
+
+        ALPWorkLogEntry.SetRange("Message Id", StartA);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(ALPWorkLogEntry.Status::Open, ALPWorkLogEntry.Status, 'OP-A must remain open');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.SetRange("Message Id", StartB);
+        ALPWorkLogEntry.FindFirst();
+        Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'OP-B must be closed');
+        Assert.AreEqual(SignoffB, ALPWorkLogEntry."End Message Id", 'Signoff source id must close OP-B row');
+
+        ALPWorkLogEntry.Reset();
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.DeleteAll(true);
+        CleanupInboxBySourceEventId(StartA);
+        CleanupInboxBySourceEventId(StartB);
+        CleanupInboxBySourceEventId(SignoffB);
+    end;
+
+    [Test]
+    procedure ExecutionEnd_ClosesAllOpenParticipantsForSameTask()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        OperationNo: Code[10];
+        WorkCenterNo: Code[20];
+        StartA: Text[50];
+        StartB: Text[50];
+        EndId: Text[50];
+        BaseTime: DateTime;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+        WorkCenterNo := GetWorkCenterNo(ProductionOrder."No.", OperationNo);
+        BaseTime := CurrentDateTime - 600000;
+        StartA := CopyStr('start-a-' + Format(CreateGuid()), 1, MaxStrLen(StartA));
+        StartB := CopyStr('start-b-' + Format(CreateGuid()), 1, MaxStrLen(StartB));
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-A', 'F', StartA);
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime + 120000);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-B', 'F', StartB);
+
+        EndId := CopyStr('end-all-' + Format(CreateGuid()), 1, MaxStrLen(EndId));
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 10, 0, 0.9, 0.8, BaseTime + 480000);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'End', 'OP-A', 'F', EndId);
+
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.SetRange("Work Center No.", WorkCenterNo);
+        ALPWorkLogEntry.SetRange(Status, ALPWorkLogEntry.Status::Closed);
+        Assert.RecordCount(ALPWorkLogEntry, 2);
+
+        ALPWorkLogEntry.SetRange("End Message Id", EndId);
+        Assert.RecordCount(ALPWorkLogEntry, 2);
+
+        ALPWorkLogEntry.DeleteAll(true);
+        CleanupInboxBySourceEventId(StartA);
+        CleanupInboxBySourceEventId(StartB);
+        CleanupInboxBySourceEventId(EndId);
     end;
 
     [Test]
