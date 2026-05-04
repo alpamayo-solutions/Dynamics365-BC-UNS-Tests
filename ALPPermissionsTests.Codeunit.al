@@ -51,10 +51,24 @@ codeunit 50091 "ALP Permissions Tests"
     end;
 
     [Test]
+    procedure ExecutionTimeAttributionTable_IsAccessible()
+    var
+        ALPExecutionTimeAttribution: Record "ALP Execution Time Attribution";
+    begin
+        // [SCENARIO] Execution time attribution table exists and is accessible
+        // [GIVEN] The ALP Execution Time Attribution table
+
+        // [WHEN] Checking table accessibility
+        // [THEN] Table is accessible (not temporary)
+        Assert.IsFalse(ALPExecutionTimeAttribution.IsTemporary(), 'Execution Time Attribution table should not be temporary');
+    end;
+
+    [Test]
     [TestPermissions(TestPermissions::Disabled)]
     procedure ShopfloorExecPermissionSet_AllowsTableAccess()
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
+        ALPExecutionTimeAttribution: Record "ALP Execution Time Attribution";
         ALPOperationExecution: Record "ALP Operation Execution";
         ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
@@ -64,6 +78,7 @@ codeunit 50091 "ALP Permissions Tests"
         // [WHEN] Tables are accessed with proper permissions
         // [THEN] Read permission is available
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should have read permission on Inbox');
+        Assert.IsTrue(ALPExecutionTimeAttribution.ReadPermission(), 'Should have read permission on Execution Time Attribution');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should have read permission on Execution');
         Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should have read permission on UNS Topic Mapping');
     end;
@@ -73,6 +88,7 @@ codeunit 50091 "ALP Permissions Tests"
     procedure ShopfloorViewPermissionSet_AllowsReadAccess()
     var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
+        ALPExecutionTimeAttribution: Record "ALP Execution Time Attribution";
         ALPOperationExecution: Record "ALP Operation Execution";
         ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
@@ -82,6 +98,7 @@ codeunit 50091 "ALP Permissions Tests"
         // [WHEN] Checking permissions with viewer access
         // [THEN] Read permission is granted
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should have read permission on Inbox');
+        Assert.IsTrue(ALPExecutionTimeAttribution.ReadPermission(), 'Should have read permission on Execution Time Attribution');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should have read permission on Execution');
         Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should have read permission on UNS Topic Mapping');
     end;
@@ -148,5 +165,22 @@ codeunit 50091 "ALP Permissions Tests"
 
         // [THEN] Codeunit exists
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Calc Svc codeunit should exist');
+    end;
+
+    [Test]
+    [TestPermissions(TestPermissions::Disabled)]
+    procedure AttributionCodeunit_IsAccessible()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] The attribution codeunit exists and is accessible
+        // [GIVEN] The extension is installed
+
+        // [WHEN] Looking for the codeunit
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Codeunit);
+        AllObjWithCaption.SetRange("Object ID", 50015);
+
+        // [THEN] Codeunit exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Attribution Svc codeunit should exist');
     end;
 }

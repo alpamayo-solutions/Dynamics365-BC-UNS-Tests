@@ -296,6 +296,51 @@ codeunit 50094 "ALP Work Log Tests"
     end;
 
     [Test]
+    procedure EndEvent_RefreshesExecutionTimeAttribution()
+    var
+        ProductionOrder: Record "Production Order";
+        Attribution: Record "ALP Execution Time Attribution";
+        Exec: Record "ALP Operation Execution";
+        ALPExecutionIngestionSvc: Codeunit "ALP Execution Ingestion Svc";
+        OperationNo: Code[10];
+        WorkCenterNo: Code[20];
+        StartId: Text[50];
+        EndId: Text[50];
+        BaseTime: DateTime;
+    begin
+        // [SCENARIO] End events refresh the calculated attribution table automatically
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+        WorkCenterNo := GetWorkCenterNo(ProductionOrder."No.", OperationNo);
+        Attribution.DeleteAll(true);
+
+        BaseTime := CurrentDateTime - 600000;
+        StartId := CopyStr('attr-start-' + Format(CreateGuid()), 1, MaxStrLen(StartId));
+        EndId := CopyStr('attr-end-' + Format(CreateGuid()), 1, MaxStrLen(EndId));
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 0, 0, 0, 0, BaseTime);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'Start', 'OP-A', 'F', StartId);
+
+        Exec := CreateExecutionRecord(ProductionOrder."No.", OperationNo, 10, 0, 0.9, 0.8, BaseTime + 10000);
+        Exec."Work Center No." := WorkCenterNo;
+        ALPExecutionIngestionSvc.ProcessExecutionEvent(Exec, CreateGuid(), 'End', 'OP-A', 'F', EndId);
+
+        Attribution.SetRange("Attribution Type", Attribution."Attribution Type"::Machine);
+        Attribution.SetRange("Order No.", ProductionOrder."No.");
+        Attribution.SetRange("Operation No.", OperationNo);
+        Attribution.SetRange("Work Center No.", WorkCenterNo);
+        Attribution.SetRange("Operator Id", '');
+        Attribution.FindFirst();
+        Assert.AreEqual(10.0, Attribution."Attributed Seconds", 'End event should refresh machine attribution');
+
+        CleanupInboxBySourceEventId(StartId);
+        CleanupInboxBySourceEventId(EndId);
+        CleanupTestData(CreateGuid(), ProductionOrder."No.", OperationNo);
+        Attribution.DeleteAll(true);
+    end;
+
+    [Test]
     procedure OperatorSignoff_ClosesOnlyMatchingParticipant()
     var
         ProductionOrder: Record "Production Order";
@@ -962,6 +1007,58 @@ codeunit 50094 "ALP Work Log Tests"
         Assert.AreEqual(ALPWorkLogEntry.Status::Closed, ALPWorkLogEntry.Status, 'Inserted event should be closed');
         Assert.AreEqual('OP-999', ALPWorkLogEntry."Operator Id", 'Operator should match');
         Assert.IsTrue(ALPWorkLogEntry."Item No." <> '', 'Item No. should be derived from the production order');
+    end;
+
+    [Test]
+    procedure CorrectionService_RefreshesExecutionTimeAttribution()
+    var
+        ProductionOrder: Record "Production Order";
+        Attribution: Record "ALP Execution Time Attribution";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        Correction: Record "ALP Execution Correction";
+        CorrectionSvc: Codeunit "ALP Execution Correction Svc";
+        OperationNo: Code[10];
+        WorkCenterNo: Code[20];
+        NewStartTime: DateTime;
+        NewEndTime: DateTime;
+    begin
+        // [SCENARIO] Corrections refresh the calculated attribution table automatically
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+        WorkCenterNo := GetWorkCenterNo(ProductionOrder."No.", OperationNo);
+        Attribution.DeleteAll(true);
+
+        NewStartTime := CurrentDateTime - 20000;
+        NewEndTime := CurrentDateTime - 10000;
+
+        Correction.Init();
+        Correction."Correction Id" := Format(CreateGuid());
+        Correction.Action := 'insert_missing_event';
+        Correction."Requested By" := 'alice.admin';
+        Correction."Requested At" := CurrentDateTime;
+        Correction."Order No." := ProductionOrder."No.";
+        Correction."Operation No." := OperationNo;
+        Correction."Work Center No." := WorkCenterNo;
+        Correction."Event Type" := 'Execution';
+        Correction."Replacement Start Time" := NewStartTime;
+        Correction."Replacement End Time" := NewEndTime;
+        Correction."Operator Id" := 'OP-999';
+        Correction."Shift Code" := 'S';
+
+        Assert.IsTrue(CorrectionSvc.ProcessCorrection(Correction), 'Correction should succeed');
+
+        Attribution.SetRange("Attribution Type", Attribution."Attribution Type"::Operator);
+        Attribution.SetRange("Order No.", ProductionOrder."No.");
+        Attribution.SetRange("Operation No.", OperationNo);
+        Attribution.SetRange("Work Center No.", WorkCenterNo);
+        Attribution.SetRange("Operator Id", 'OP-999');
+        Attribution.FindFirst();
+        Assert.AreEqual(10.0, Attribution."Attributed Seconds", 'Correction should refresh operator attribution');
+
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.DeleteAll(true);
+        Attribution.DeleteAll(true);
     end;
 
     [Test]

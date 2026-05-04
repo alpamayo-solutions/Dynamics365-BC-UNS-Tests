@@ -2,7 +2,7 @@
   "id": "dbbe7042-978c-461f-abe3-5ce36a97d622",
   "name": "UNS Bridge Connector Tests",
   "publisher": "alpamayo",
-  "version": "1.1.0.0",
+  "version": "1.2.0.0",
 
   "brief": "Automated tests for UNS Bridge Connector",
   "description": "Test codeunits validating safety, idempotency, and resilience of the UNS Bridge Connector extension",
@@ -24,7 +24,7 @@
       "id": "dbbe7042-978c-461f-abe3-5ce36a97d621",
       "name": "UNS Bridge Connector",
       "publisher": "alpamayo",
-      "version": "1.4.0.0"
+      "version": "1.5.0.0"
     },
     {
       "id": "dd0be2ea-f733-4d65-bb34-a28f4624fb14",

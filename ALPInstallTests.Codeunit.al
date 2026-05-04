@@ -61,6 +61,22 @@ codeunit 50092 "ALP Install Tests"
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Topic Mapping table (50005) should exist');
     end;
 
+    [Test]
+    procedure Install_ExecutionTimeAttributionTableExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, ALP Execution Time Attribution table exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for table existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Table);
+        AllObjWithCaption.SetRange("Object ID", 50008);
+
+        // [THEN] Table exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Time Attribution table (50008) should exist');
+    end;
+
     // ==================== ENUM EXISTENCE TESTS ====================
 
     [Test]
@@ -96,6 +112,22 @@ codeunit 50092 "ALP Install Tests"
     end;
 
     [Test]
+    procedure Install_TimeAttributionTypeEnumExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, ALP Time Attribution Type enum exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for enum existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Enum);
+        AllObjWithCaption.SetRange("Object ID", 50004);
+
+        // [THEN] Enum exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Time Attribution Type enum (50004) should exist');
+    end;
+
+    [Test]
     procedure Install_IngestionCodeunitExists()
     var
         AllObjWithCaption: Record AllObjWithCaption;
@@ -125,6 +157,22 @@ codeunit 50092 "ALP Install Tests"
 
         // [THEN] Codeunit exists
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Calc Svc codeunit (50012) should exist');
+    end;
+
+    [Test]
+    procedure Install_AttributionCodeunitExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, attribution codeunit exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for codeunit existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Codeunit);
+        AllObjWithCaption.SetRange("Object ID", 50015);
+
+        // [THEN] Codeunit exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Attribution Svc codeunit (50015) should exist');
     end;
 
     // ==================== PAGE EXISTENCE TESTS ====================
@@ -307,6 +355,22 @@ codeunit 50092 "ALP Install Tests"
         Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP UNS Topic Mapping API page (50039) should exist');
     end;
 
+    [Test]
+    procedure Install_ExecutionTimeAttributionsAPIPageExists()
+    var
+        AllObjWithCaption: Record AllObjWithCaption;
+    begin
+        // [SCENARIO] After installation, Execution Time Attributions API page exists
+        // [GIVEN] The app is installed
+
+        // [WHEN] Checking for page existence
+        AllObjWithCaption.SetRange("Object Type", AllObjWithCaption."Object Type"::Page);
+        AllObjWithCaption.SetRange("Object ID", 50045);
+
+        // [THEN] Page exists
+        Assert.IsFalse(AllObjWithCaption.IsEmpty(), 'ALP Execution Time Attributions API page (50045) should exist');
+    end;
+
     // ==================== REPORT EXISTENCE TESTS ====================
 
     [Test]
@@ -402,8 +466,9 @@ codeunit 50092 "ALP Install Tests"
 
     [Test]
     procedure Install_TablesAreAccessible()
-    var
+        var
         ALPIntegrationInbox: Record "ALP Integration Inbox";
+        ALPExecutionTimeAttribution: Record "ALP Execution Time Attribution";
         ALPOperationExecution: Record "ALP Operation Execution";
         ALPUNSTopicMapping: Record "ALP UNS Topic Mapping";
     begin
@@ -413,10 +478,12 @@ codeunit 50092 "ALP Install Tests"
         // [WHEN] Checking table accessibility
         // [THEN] Tables can be queried without error
         ALPIntegrationInbox.Reset();
+        ALPExecutionTimeAttribution.Reset();
         ALPOperationExecution.Reset();
         ALPUNSTopicMapping.Reset();
 
         Assert.IsTrue(ALPIntegrationInbox.ReadPermission(), 'Should be able to read Inbox table');
+        Assert.IsTrue(ALPExecutionTimeAttribution.ReadPermission(), 'Should be able to read Execution Time Attribution table');
         Assert.IsTrue(ALPOperationExecution.ReadPermission(), 'Should be able to read Execution table');
         Assert.IsTrue(ALPUNSTopicMapping.ReadPermission(), 'Should be able to read UNS Topic Mapping table');
     end;
