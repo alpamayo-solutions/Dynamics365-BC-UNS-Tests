@@ -2,7 +2,7 @@
 /// Business-correctness tests for execution time attribution.
 /// These tests validate machine union time and operator split/additive semantics.
 /// </summary>
-codeunit 50095 "ALP Execution Attribution Tests"
+codeunit 50095 "ALP Exec Attribution Tests"
 {
     Subtype = Test;
     TestPermissions = Disabled;
