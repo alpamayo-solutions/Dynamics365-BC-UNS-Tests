@@ -394,6 +394,43 @@ codeunit 50094 "ALP Work Log Tests"
     end;
 
     [Test]
+    procedure CloseAllOpenWorkLogEntries_ClosesEveryMatchingOpenInterval()
+    var
+        ProductionOrder: Record "Production Order";
+        ALPWorkLogEntry: Record "ALP Work Log Entry";
+        WorkLogSvc: Codeunit "ALP Work Log Svc";
+        WorkLogEventType: Enum "ALP Work Log Event Type";
+        OperationNo: Code[10];
+        WorkCenterNo: Code[20];
+        BaseTime: DateTime;
+        EndTime: DateTime;
+        ClosedCount: Integer;
+    begin
+        Initialize();
+        CreateReleasedProductionOrderWithRouting(ProductionOrder, OperationNo);
+        WorkCenterNo := GetWorkCenterNo(ProductionOrder."No.", OperationNo);
+        BaseTime := CurrentDateTime - 600000;
+        EndTime := BaseTime + 480000;
+
+        WorkLogSvc.CreateWorkLogEntry('close-all-old', ProductionOrder."No.", OperationNo, WorkCenterNo, 'OP-OLD', '', 'F', WorkLogEventType::Execution, '', BaseTime - 120000, 'TEST');
+        WorkLogSvc.CreateWorkLogEntry('close-all-a', ProductionOrder."No.", OperationNo, WorkCenterNo, 'OP-A', '', 'F', WorkLogEventType::Execution, '', BaseTime, 'TEST');
+        WorkLogSvc.CreateWorkLogEntry('close-all-b', ProductionOrder."No.", OperationNo, WorkCenterNo, 'OP-B', '', 'F', WorkLogEventType::Execution, '', BaseTime + 120000, 'TEST');
+
+        ClosedCount := WorkLogSvc.CloseAllOpenWorkLogEntries(ProductionOrder."No.", OperationNo, WorkCenterNo, WorkLogEventType::Execution, EndTime, 'close-all-end');
+
+        Assert.AreEqual(3, ClosedCount, 'All matching open intervals should be closed');
+        ALPWorkLogEntry.SetRange("Order No.", ProductionOrder."No.");
+        ALPWorkLogEntry.SetRange("Operation No.", OperationNo);
+        ALPWorkLogEntry.SetRange("Work Center No.", WorkCenterNo);
+        ALPWorkLogEntry.SetRange(Status, ALPWorkLogEntry.Status::Closed);
+        Assert.RecordCount(ALPWorkLogEntry, 3);
+        ALPWorkLogEntry.SetRange("End Message Id", 'close-all-end');
+        Assert.RecordCount(ALPWorkLogEntry, 3);
+
+        ALPWorkLogEntry.DeleteAll(true);
+    end;
+
+    [Test]
     procedure ExecutionEnd_ClosesAllOpenParticipantsForSameTask()
     var
         ProductionOrder: Record "Production Order";
